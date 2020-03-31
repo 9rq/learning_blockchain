@@ -33,14 +33,14 @@ class Block():
                 'bits' : hex(self.bits)[2:].rjust(8,'0'),
                 'nonce' : self.nonce,
                 'elapsed_time' : self.elapsed_time,
-                'block_hash' : self.blcok_hash
+                'block_hash' : self.block_hash
                 }
         return res
 
     def calc_blockhash(self):
         blockheader = str(self.index) + str(self.prev_hash) + str(self.data) + str(self.timestamp) + hex(self.bits)[2:] + str(self.nonce)
         h = hashlib.sha256(blockheader.encode()).hexdigest()
-        self.blcok_hash = h
+        self.block_hash = h
         return h
 
     def calc_target(self):
@@ -87,5 +87,48 @@ class BlockChain():
 
     def add_new_block(self,i):
         last_block = self.chain[-1]
-        block = Block(i+1, last_block.block_hash, 'block '+str(i+1), datetime.datetime.now(), last_block.bits)
+        new_bits = self.get_retarget_bits()
+
+        if new_bits < 0:
+            bits = last_block.bits
+        else:
+            bits = new_bits
+        block = Block(i+1, last_block.block_hash, 'block '+str(i+1), datetime.datetime.now(), bits)
         self.mining(block)
+
+    def get_retarget_bits(self,ideal_time = 30,term = 5):
+        if term == 0:
+            raise ValueError('term must be more than 0')
+        if self.chain and len(self.chain) % term != 0:
+            return -1
+
+        expected_time = ideal_time * term
+        if len(self.chain) / term == 1:
+            expected_time -= ideal_time
+            first_block = self.chain[0]
+        else:
+            first_block = self.chain[-term-1]
+        last_block = self.chain[-1]
+
+        first_time = first_block.timestamp.timestamp()
+        last_time = last_block.timestamp.timestamp()
+        total_time = last_time - first_time
+
+        target = last_block.calc_target()
+        delta = total_time / expected_time
+        if delta < 0.25:
+            delta = 0.25
+        elif delta > 4:
+            delta = 4
+        new_target = int(target * delta)
+
+        exponent_bytes = (last_block.bits >> 24) - 3
+        exponent_bits = exponent_bytes * 8
+        temp_bits = new_target >> exponent_bits
+        if temp_bits != temp_bits & 0xffffff:
+            exponent_bytes += 1
+            exponent_bits += 8
+        elif temp_bits == temp_bits & 0xffff:
+            exponent_bytes -= 1
+            exponent_bits -= 8
+        return ((exponent_bytes +3) << 24) | (new_target >> exponent_bits)
