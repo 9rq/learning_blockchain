@@ -4,5 +4,5 @@ if __name__ == '__main__':
     print('generating genesis block ...')
     bc.create_genesis()
     for i in range(30):
-        print('generating {}th block ...'.format(i+2))
+        print('generating {}th block ...'.format(i+2)) # genesis + 1-origin
         bc.add_new_block(i)
